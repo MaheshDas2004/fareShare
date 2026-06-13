@@ -7,10 +7,8 @@ from .models import User
 
 
 @require_http_methods(["GET", "POST"])
-def register(request):
-    context = {
-        "errors": {}
-    }
+def registerView(request):
+    context = {"errors": {}}
 
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
@@ -39,92 +37,72 @@ def register(request):
         if User.objects.filter(email=email).exists():
             context["errors"]["email"] = "Email already exists."
 
-        # Password match
         if password != confirm_password:
             context["errors"]["confirm_password"] = "Passwords do not match."
 
-        # Password validation
-        try:
-            validate_password(password)
-        except ValidationError as e:
-            context["errors"]["password"] = e.messages[0]
+        if password:
+            try:
+                validate_password(password)
+            except ValidationError as e:
+                context["errors"]["password"] = e.messages[0]
 
-        # Return errors
         if context["errors"]:
-            return render(
-                request,
-                "authentication/register.html",
-                context
-            )
+            return render(request, "authentication/register.html", context)
 
-        # Create user
-        user = User.objects.create(
+        user = User.objects.create_user(
             username=username,
-            email=email
-        )
-
-        user.set_password(password)
-        user.save()
-
-        return redirect("login")
-
-    return render(
-        request,
-        "authentication/register.html"
-    )
-
-
-@require_http_methods(["GET", "POST"])
-def login(request):
-    context = {}
-
-    if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        password = request.POST.get("password", "")
-
-        context["username"] = username
-
-        if not username:
-            context["error"] = "Username is required."
-            return render(
-                request,
-                "authentication/login.html",
-                context
-            )
-
-        if not password:
-            context["error"] = "Password is required."
-            return render(
-                request,
-                "authentication/login.html",
-                context
-            )
-
-        user = authenticate(
-            request,
-            username=username,
+            email=email,
             password=password
         )
 
-        if not user:
-            context["error"] = "Invalid credentials."
-            return render(
-                request,
-                "authentication/login.html",
-                context
-            )
-
         login(request, user)
-
         return redirect("dashboard")
 
-    return render(
-        request,
-        "authentication/login.html"
-    )
+    return render(request, "authentication/register.html")
 
+@require_http_methods(["GET", "POST"])
+def loginView(request):
+    context = {"errors": {}}
 
+    if request.method == "POST":
+        identifier = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
+
+        context["identifier"] = identifier
+
+        if not identifier:
+            context["errors"]["login"] = "Username or Email is required."
+            
+        if not password:
+            context["errors"]["login"] = "Password is required."
+
+        if context["errors"]:
+            return render(request, "authentication/login.html", context)
+
+        user_obj = User.objects.filter(username=identifier).first()
+
+        if not user_obj:
+            user_obj = User.objects.filter(email=identifier).first()
+
+        if not user_obj:
+            context["errors"]["login"] = "Invalid credentials."
+            return render(request, "authentication/login.html", context)
+
+        user = authenticate(request, username=user_obj.username, password=password)
+
+        if not user:
+            context["errors"]["login"] = "Invalid credentials."
+            return render(request, "authentication/login.html", context)
+
+        if not user.is_active:
+            context["errors"]["login"] = "Account is disabled."
+            return render(request, "authentication/login.html", context)
+
+        login(request, user)
+        return redirect("dashboard")
+
+    return render(request, "authentication/login.html")
 @require_POST
-def logout(request):
+def logoutView(request):
     logout(request)
     return redirect("login")
