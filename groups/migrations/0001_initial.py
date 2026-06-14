@@ -34,8 +34,8 @@ class Migration(migrations.Migration):
             name='GroupMembership',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('is_active', models.BooleanField(default=True)),
                 ('joined_at', models.DateTimeField(auto_now_add=True)),
+                ('left_at', models.DateTimeField(blank=True, null=True)),
                 ('group', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='groups.group')),
                 ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='group_memberships', to=settings.AUTH_USER_MODEL)),
             ],
