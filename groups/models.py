@@ -20,17 +20,18 @@ class Group(models.Model):
     def __str__(self):
         return self.name
 
-
 class GroupMembership(models.Model):
     group = models.ForeignKey(Group,on_delete=models.CASCADE,related_name="memberships")
-
     user = models.ForeignKey(User,on_delete=models.CASCADE,related_name="group_memberships")
-
-    is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True,blank=True)
 
     class Meta:
         unique_together = ("group", "user")
+
+    @property
+    def is_active(self):
+        return self.left_at is None
 
     def __str__(self):
         return f"{self.user} in {self.group}"
