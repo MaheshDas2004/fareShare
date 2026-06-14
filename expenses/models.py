@@ -59,8 +59,6 @@ class Expense(models.Model):
         related_name="expenses_created"
     )
 
-    is_settled = models.BooleanField(default=False)
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
