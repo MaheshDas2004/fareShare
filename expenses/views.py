@@ -3,14 +3,19 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from .models import Expense, ExpenseParticipant
+from django.views.decorators.http import require_POST, require_http_methods
+
+from .models import Expense, ExpenseParticipant, Currency
 from .services.split_logic import SplitLogic
 from common.services.balance_service import BalanceService
 from groups.models import Group, GroupMembership
-from django.views.decorators.http import require_POST
 
 User = get_user_model()
 
+
+# ------------------------------------------------------------------ #
+# Helpers                                                              #
+# ------------------------------------------------------------------ #
 
 def is_active_member(group, user):
     return GroupMembership.objects.filter(
@@ -20,6 +25,20 @@ def is_active_member(group, user):
     ).exists()
 
 
+def can_manage_expense(expense, user):
+    """
+    Fix #13 — group creator OR expense creator can manage (edit/delete).
+    """
+    return (
+        expense.created_by == user
+        or expense.group.created_by == user
+    )
+
+
+# ------------------------------------------------------------------ #
+# Expense CRUD                                                         #
+# ------------------------------------------------------------------ #
+
 @require_POST
 @login_required
 @transaction.atomic
@@ -27,13 +46,14 @@ def create_expense(request):
     group = get_object_or_404(Group, id=request.POST.get("group_id"))
 
     if not is_active_member(group, request.user):
-        messages.error(request, "Tum is group ke member nahi ho")
+        messages.error(request, "You are not an active member of this group.")
         return redirect("groups:group_detail", pk=group.id)
 
-    paid_by = get_object_or_404(User, id=request.POST.get("paid_by"))
+    paid_by_id = request.POST.get("paid_by")
+    paid_by = get_object_or_404(User, id=paid_by_id)
 
     if not is_active_member(group, paid_by):
-        messages.error(request, "Yeh user group ka member nahi hai")
+        messages.error(request, "The payer is not an active member of this group.")
         return redirect("groups:group_detail", pk=group.id)
 
     try:
@@ -42,11 +62,11 @@ def create_expense(request):
         shares = request.POST.getlist("shares")
 
         if not participants:
-            messages.error(request, "Koi participant nahi chuna")
+            messages.error(request, "At least one participant is required.")
             return redirect("groups:group_detail", pk=group.id)
 
         if split_type != "EQUAL" and len(shares) != len(participants):
-            messages.error(request, "Har participant ka share hona chahiye")
+            messages.error(request, "Each participant must have a share value.")
             return redirect("groups:group_detail", pk=group.id)
 
         expense = Expense.objects.create(
@@ -62,10 +82,10 @@ def create_expense(request):
         )
 
         for index, user_id in enumerate(participants):
-            user = get_object_or_404(User, id=user_id)
+            participant_user = get_object_or_404(User, id=user_id)
             ExpenseParticipant.objects.create(
                 expense=expense,
-                user=user,
+                user=participant_user,
                 is_included=True,
                 share=shares[index] if split_type != "EQUAL" else None
             )
@@ -73,7 +93,7 @@ def create_expense(request):
         engine = SplitLogic()
         engine.calculate(expense)
 
-        messages.success(request, "Expense successfully create ho gaya!")
+        messages.success(request, "Expense created successfully.")
         return redirect("groups:group_detail", pk=group.id)
 
     except ValueError as e:
@@ -81,19 +101,136 @@ def create_expense(request):
         return redirect("groups:group_detail", pk=group.id)
 
 
+@login_required
+@require_http_methods(["GET", "POST"])
+@transaction.atomic
+def edit_expense(request, pk):
+    expense = get_object_or_404(Expense, id=pk)
+
+    if not can_manage_expense(expense, request.user):
+        messages.error(request, "You do not have permission to edit this expense.")
+        return redirect("groups:group_detail", pk=expense.group.id)
+
+    group = expense.group
+    currencies = Currency.objects.filter(is_active=True)
+    active_members = GroupMembership.objects.filter(
+        group=group, left_at__isnull=True
+    ).select_related("user")
+
+    if request.method == "POST":
+        try:
+            split_type = request.POST.get("split_type")
+            participants = request.POST.getlist("participants")
+            shares = request.POST.getlist("shares")
+
+            if not participants:
+                messages.error(request, "At least one participant is required.")
+                return redirect("expenses:edit_expense", pk=pk)
+
+            if split_type != "EQUAL" and len(shares) != len(participants):
+                messages.error(request, "Each participant must have a share value.")
+                return redirect("expenses:edit_expense", pk=pk)
+
+            expense.description = request.POST.get("description")
+            expense.amount = request.POST.get("amount")
+            expense.currency_id = request.POST.get("currency_id")
+            expense.paid_by = get_object_or_404(User, id=request.POST.get("paid_by"))
+            expense.split_type = split_type
+            expense.date = request.POST.get("date")
+            expense.notes = request.POST.get("notes", "")
+            expense.save()
+
+            expense.participants.all().delete()
+            expense.splits.all().delete()
+
+            for index, user_id in enumerate(participants):
+                participant_user = get_object_or_404(User, id=user_id)
+                ExpenseParticipant.objects.create(
+                    expense=expense,
+                    user=participant_user,
+                    is_included=True,
+                    share=shares[index] if split_type != "EQUAL" else None
+                )
+
+            engine = SplitLogic()
+            engine.calculate(expense)
+
+            messages.success(request, "Expense updated successfully.")
+            return redirect("groups:group_detail", pk=group.id)
+
+        except ValueError as e:
+            messages.error(request, str(e))
+
+    context = {
+        "expense": expense,
+        "group": group,
+        "currencies": currencies,
+        "active_members": active_members,
+        "split_types": Expense.SPLIT_TYPES,
+        "current_participants": expense.participants.filter(is_included=True).values_list("user_id", flat=True),
+    }
+    return render(request, "expenses/edit_expense.html", context)
+
+
 @require_POST
 @login_required
 def delete_expense(request, pk):
     expense = get_object_or_404(Expense, id=pk)
 
-    if expense.created_by != request.user:
-        messages.error(request, "Tum yeh expense delete nahi kar sakte")
+    if not can_manage_expense(expense, request.user):
+        messages.error(request, "You do not have permission to delete this expense.")
         return redirect("groups:group_detail", pk=expense.group.id)
 
     group_id = expense.group.id
     expense.delete()
-    messages.success(request, "Expense delete ho gaya!")
+    messages.success(request, "Expense deleted.")
     return redirect("groups:group_detail", pk=group_id)
+
+
+
+@login_required
+def expense_list(request, group_id):
+    """
+    Fix #7 — lists all expenses in a group with participant breakdown.
+    Satisfies Rohan: "I want to see exactly which expenses make that up."
+    """
+    group = get_object_or_404(Group, id=group_id)
+
+    if not is_active_member(group, request.user):
+        messages.error(request, "You are not an active member of this group.")
+        return redirect("groups:group_list")
+
+    expenses = (
+        Expense.objects
+        .filter(group=group)
+        .select_related("paid_by", "currency")
+        .prefetch_related("splits__user", "participants__user")
+        .order_by("-date", "-created_at")
+    )
+
+    return render(request, "expenses/expense_list.html", {
+        "group": group,
+        "expenses": expenses,
+    })
+
+
+@login_required
+def expense_detail(request, pk):
+    
+    expense = get_object_or_404(Expense, id=pk)
+    group = expense.group
+
+    if not is_active_member(group, request.user):
+        messages.error(request, "You are not an active member of this group.")
+        return redirect("groups:group_list")
+
+    splits = expense.splits.select_related("user").all()
+
+    return render(request, "expenses/expense_detail.html", {
+        "expense": expense,
+        "group": group,
+        "splits": splits,
+    })
 
 
 @login_required
@@ -101,7 +238,7 @@ def group_balances(request, group_id):
     group = get_object_or_404(Group, id=group_id)
 
     if not is_active_member(group, request.user):
-        messages.error(request, "Tum is group ke member nahi ho")
+        messages.error(request, "You are not an active member of this group.")
         return redirect("groups:group_detail", pk=group_id)
 
     service = BalanceService()
@@ -109,7 +246,7 @@ def group_balances(request, group_id):
 
     return render(request, "expenses/group_balances.html", {
         "group": group,
-        "balances": balances
+        "balances": balances,
     })
 
 
@@ -119,5 +256,5 @@ def user_balances(request):
     balances = service.get_user_balances(request.user)
 
     return render(request, "expenses/user_balances.html", {
-        "balances": balances
+        "balances": balances,
     })
