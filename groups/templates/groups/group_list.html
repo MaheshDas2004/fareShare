@@ -1,0 +1,44 @@
+{% extends "common/base.html" %}
+{% block title %}Groups · FareShare{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">Your groups</h1>
+    <p class="text-muted mb-0">Open a group to create expenses, settle balances, and manage members.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'groups:create_group' %}">Create group</a>
+</div>
+
+{% if groups %}
+  <div class="row g-3">
+    {% for group in groups %}
+      <div class="col-lg-4 col-md-6">
+        <div class="card card-soft h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+              <div>
+                <h2 class="h5 mb-1">{{ group.name }}</h2>
+                <p class="text-muted mb-0">{{ group.description|default:"No description" }}</p>
+              </div>
+              <span class="badge text-bg-secondary">{{ group.default_currency }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+              <small class="text-muted">Created {{ group.created_at|date:"M d, Y" }}</small>
+              <a class="btn btn-outline-primary btn-sm" href="{% url 'groups:group_detail' group.pk %}">Open</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card card-soft">
+    <div class="card-body text-center py-5">
+      <h2 class="h5">No groups yet</h2>
+      <p class="text-muted">Create your first group to start tracking expenses together.</p>
+      <a class="btn btn-primary" href="{% url 'groups:create_group' %}">Create group</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

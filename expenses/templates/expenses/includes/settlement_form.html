@@ -1,0 +1,104 @@
+<div class="card card-soft">
+  <div class="card-body p-4">
+    <h2 class="h5 mb-1">{{ form_title|default:"Settle up" }}</h2>
+    <p class="text-muted mb-3">Record a payment between two group members.</p>
+
+    <form method="post" action="{{ action }}" class="vstack gap-3 settlement-form">
+      {% csrf_token %}
+      <input type="hidden" name="group_id" value="{{ group.id }}">
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Paid by</label>
+          <select class="form-select" name="paid_by" required>
+            {% for row in participant_rows %}
+              <option value="{{ row.member.user.id }}">{{ row.member.user.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Paid to</label>
+          <select class="form-select" name="paid_to" required>
+            {% for row in participant_rows %}
+              <option value="{{ row.member.user.id }}">{{ row.member.user.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Amount</label>
+          <input class="form-control" type="number" step="0.01" min="0" name="amount" required>
+          <div class="alert alert-info py-2 mt-2 mb-0 small d-none" data-conversion-preview></div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Currency</label>
+          <select class="form-select" name="currency_id" required data-currency-select>
+            {% for currency in currencies %}
+              <option value="{{ currency.id }}" data-code="{{ currency.code }}" {% if currency.code == group.default_currency %}selected{% endif %}>
+                {{ currency.code }} · {{ currency.symbol }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Date</label>
+          <input class="form-control" type="date" name="date" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">Notes</label>
+        <textarea class="form-control" name="notes" rows="2" placeholder="Optional notes"></textarea>
+      </div>
+
+      <button class="btn btn-success px-4">Record settlement</button>
+    </form>
+  </div>
+</div>
+
+{{ currency_rates|json_script:"settlement-currency-rates-data" }}
+<script>
+(() => {
+  const form = document.querySelector('.settlement-form');
+  if (!form) return;
+
+  const ratesElement = document.getElementById('settlement-currency-rates-data');
+  const rates = ratesElement ? JSON.parse(ratesElement.textContent) : {};
+  const currencySelect = form.querySelector('[data-currency-select]');
+  const amountInput = form.querySelector('input[name="amount"]');
+  const preview = form.querySelector('[data-conversion-preview]');
+  const defaultCurrency = "{{ group.default_currency }}";
+
+  const renderPreview = () => {
+    const selectedOption = currencySelect.options[currencySelect.selectedIndex];
+    const currencyCode = selectedOption?.dataset?.code;
+    const amount = Number(amountInput.value);
+
+    if (!currencyCode || !amount) {
+      preview.textContent = '';
+      preview.classList.add('d-none');
+      return;
+    }
+
+    const rate = Number(rates[currencyCode] || 0);
+    if (!rate) {
+      preview.textContent = '';
+      preview.classList.add('d-none');
+      return;
+    }
+
+    if (currencyCode === defaultCurrency) {
+      preview.textContent = '';
+      preview.classList.add('d-none');
+      return;
+    }
+
+    const converted = (amount * rate).toFixed(2);
+    preview.classList.remove('d-none');
+    preview.textContent = `Approx. ₹${converted} at ${rate.toFixed(2)} INR per ${currencyCode}.`;
+  };
+
+  currencySelect.addEventListener('change', renderPreview);
+  amountInput.addEventListener('input', renderPreview);
+  renderPreview();
+})();
+</script>

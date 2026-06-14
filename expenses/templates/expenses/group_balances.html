@@ -1,0 +1,41 @@
+{% extends "common/base.html" %}
+{% block title %}Group balances · FareShare{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">{{ group.name }} balances</h1>
+    <p class="text-muted mb-0">Who should pay whom to settle up this group.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'groups:group_detail' group.id %}">Back to group</a>
+</div>
+
+<div class="card card-soft">
+  <div class="card-body">
+    {% if balances %}
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>To</th>
+              <th class="text-end">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for balance in balances %}
+              <tr>
+                <td>{{ balance.from_user.username }}</td>
+                <td>{{ balance.to_user.username }}</td>
+                <td class="text-end fw-semibold">₹{{ balance.amount }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Everything is settled up in this group.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

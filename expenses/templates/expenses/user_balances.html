@@ -1,0 +1,78 @@
+{% extends "common/base.html" %}
+{% block title %}My balances · FareShare{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">My balances</h1>
+    <p class="text-muted mb-0">Every group you owe in or are owed from.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'groups:group_list' %}">Groups</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="text-muted small">Total you owe</div>
+        <div class="fs-3 fw-bold text-danger">₹{{ balances.owe_total|default:0 }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="text-muted small">Total owed to you</div>
+        <div class="fs-3 fw-bold text-success">₹{{ balances.owed_total|default:0 }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card card-soft h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-3">You owe</h2>
+        {% if balances.owe %}
+          <div class="vstack gap-2">
+            {% for item in balances.owe %}
+              <div class="border rounded-3 p-3 bg-light d-flex justify-content-between">
+                <div>
+                  <div class="fw-semibold">{{ item.group.name }}</div>
+                  <small class="text-muted">Pay {{ item.to_user.username }}</small>
+                </div>
+                <div class="fw-bold text-danger">₹{{ item.amount }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">Nothing due from your side.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card card-soft h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-3">You are owed</h2>
+        {% if balances.owed %}
+          <div class="vstack gap-2">
+            {% for item in balances.owed %}
+              <div class="border rounded-3 p-3 bg-light d-flex justify-content-between">
+                <div>
+                  <div class="fw-semibold">{{ item.group.name }}</div>
+                  <small class="text-muted">{{ item.from_user.username }} owes you</small>
+                </div>
+                <div class="fw-bold text-success">₹{{ item.amount }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No one owes you right now.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
