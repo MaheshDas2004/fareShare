@@ -7,6 +7,10 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Group, GroupMembership
+from expenses.models import Expense, Currency
+from settlements.models import Settlement
+from common.services.balance_service import BalanceService
+from common.services.currency_service import CurrencyService
 
 User = get_user_model()
 
@@ -43,11 +47,52 @@ def group_detail(request, pk):
         group=group, left_at__isnull=False
     ).select_related("user")
 
+    recent_expenses = (
+        Expense.objects.filter(group=group)
+        .select_related("paid_by", "currency")
+        .prefetch_related("splits__user", "participants__user")
+        .order_by("-date", "-created_at")[:8]
+    )
+
+    recent_settlements = (
+        Settlement.objects.filter(group=group)
+        .select_related("paid_by", "paid_to", "currency")
+        .order_by("-date", "-created_at")[:6]
+    )
+
+    balances = BalanceService().get_group_balances(group)
+    currencies = Currency.objects.filter(is_active=True).order_by("code")
+    currency_service = CurrencyService()
+    currency_rates = {}
+    for currency in currencies:
+        if currency.code == "INR":
+            currency_rates[currency.code] = "1"
+            continue
+        try:
+            currency_rates[currency.code] = str(currency_service.get_rate(currency.code, timezone.localdate()))
+        except ValueError:
+            continue
+    participant_rows = [
+        {
+            "member": membership,
+            "selected": True,
+            "share": None,
+        }
+        for membership in active_members
+    ]
+
     return render(request, "groups/group_detail.html", {
         "group": group,
         "active_members": active_members,
         "past_members": past_members,
         "is_creator": group.created_by == request.user,
+        "recent_expenses": recent_expenses,
+        "recent_settlements": recent_settlements,
+        "balances": balances,
+        "currencies": currencies,
+        "currency_rates": currency_rates,
+        "split_types": Expense.SPLIT_TYPES,
+        "participant_rows": participant_rows,
     })
 
 @login_required
