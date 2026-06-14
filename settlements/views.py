@@ -4,10 +4,25 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.views.decorators.http import require_POST
 from django.db import transaction
+
 from .models import Settlement
-from groups.models import Group
+from groups.models import Group, GroupMembership
+
 User = get_user_model()
 
+def is_active_member(group, user):
+    return GroupMembership.objects.filter(
+        group=group,
+        user=user,
+        left_at__isnull=True
+    ).exists()
+
+
+def can_manage_settlement(settlement, user):
+    return (
+        settlement.created_by == user
+        or settlement.group.created_by == user
+    )
 
 @require_POST
 @login_required
@@ -15,31 +30,36 @@ User = get_user_model()
 def create_settlement(request):
     group = get_object_or_404(Group, id=request.POST.get("group_id"))
 
-    if not group.members.filter(id=request.user.id).exists():
-        messages.error(request, "Tum is group ke member nahi ho")
-        return redirect("group_detail", pk=group.id)
+    if not is_active_member(group, request.user):
+        messages.error(request, "You are not an active member of this group.")
+        return redirect("groups:group_detail", pk=group.id)
 
     paid_by = get_object_or_404(User, id=request.POST.get("paid_by"))
     paid_to = get_object_or_404(User, id=request.POST.get("paid_to"))
 
-    if not group.members.filter(id=paid_by.id).exists():
-        messages.error(request, "Yeh user group ka member nahi hai")
-        return redirect("group_detail", pk=group.id)
+    if not is_active_member(group, paid_by):
+        messages.error(request, f"{paid_by.username} is not an active member of this group.")
+        return redirect("groups:group_detail", pk=group.id)
 
-    if not group.members.filter(id=paid_to.id).exists():
-        messages.error(request, "Yeh user group ka member nahi hai")
-        return redirect("group_detail", pk=group.id)
+    if not is_active_member(group, paid_to):
+        messages.error(request, f"{paid_to.username} is not an active member of this group.")
+        return redirect("groups:group_detail", pk=group.id)
 
     if paid_by == paid_to:
-        messages.error(request, "Ek hi user ko paid_by aur paid_to nahi rakha ja sakta")
-        return redirect("group_detail", pk=group.id)
+        messages.error(request, "Payer and payee cannot be the same person.")
+        return redirect("groups:group_detail", pk=group.id)
 
     try:
-        amount = request.POST.get("amount")
+        amount = request.POST.get("amount", "").strip()
 
-        if not amount or float(amount) <= 0:
-            messages.error(request, "Amount sahi hona chahiye")
-            return redirect("group_detail", pk=group.id)
+        if not amount:
+            messages.error(request, "Amount is required.")
+            return redirect("groups:group_detail", pk=group.id)
+
+        amount_decimal = float(amount)
+        if amount_decimal <= 0:
+            messages.error(request, "Amount must be greater than zero.")
+            return redirect("groups:group_detail", pk=group.id)
 
         Settlement.objects.create(
             group=group,
@@ -52,12 +72,15 @@ def create_settlement(request):
             created_by=request.user
         )
 
-        messages.success(request, f"{paid_by} ne {paid_to} ko {amount} de diye!")
-        return redirect("group_detail", pk=group.id)
+        messages.success(
+            request,
+            f"{paid_by.username} paid {paid_to.username} ₹{amount}. Balance updated."
+        )
+        return redirect("groups:group_detail", pk=group.id)
 
-    except ValueError as e:
-        messages.error(request, str(e))
-        return redirect("group_detail", pk=group.id)
+    except (ValueError, TypeError) as e:
+        messages.error(request, f"Invalid data: {e}")
+        return redirect("groups:group_detail", pk=group.id)
 
 
 @require_POST
@@ -65,11 +88,11 @@ def create_settlement(request):
 def delete_settlement(request, pk):
     settlement = get_object_or_404(Settlement, id=pk)
 
-    if not settlement.group.members.filter(id=request.user.id).exists():
-        messages.error(request, "Tum is group ke member nahi ho")
-        return redirect("group_detail", pk=settlement.group.id)
+    if not can_manage_settlement(settlement, request.user):
+        messages.error(request, "You do not have permission to delete this settlement.")
+        return redirect("groups:group_detail", pk=settlement.group.id)
 
     group_id = settlement.group.id
     settlement.delete()
-    messages.success(request, "Settlement delete ho gaya!")
-    return redirect("group_detail", pk=group_id)
+    messages.success(request, "Settlement deleted.")
+    return redirect("groups:group_detail", pk=group_id)
