@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from .models import Expense, ExpenseParticipant
 from .services.split_logic import SplitLogic
-from .services.balance_service import BalanceService
+from common.services.balance_service import BalanceService
 from groups.models import Group
 from django.views.decorators.http import require_POST
 
