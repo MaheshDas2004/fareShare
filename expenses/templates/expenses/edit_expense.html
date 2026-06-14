@@ -1,0 +1,7 @@
+{% extends "common/base.html" %}
+{% block title %}Edit expense · FareShare{% endblock %}
+
+{% block content %}
+{% url 'expenses:edit_expense' expense.pk as expense_edit_url %}
+{% include "expenses/includes/expense_form.html" with action=expense_edit_url form_title="Edit expense" submit_label="Update expense" %}
+{% endblock %}

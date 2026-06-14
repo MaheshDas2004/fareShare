@@ -1,0 +1,49 @@
+{% extends "common/base.html" %}
+{% block title %}Expenses · FareShare{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">{{ group.name }} expenses</h1>
+    <p class="text-muted mb-0">A complete view of every expense in this group.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'groups:group_detail' group.id %}">Back to group</a>
+</div>
+
+<div class="card card-soft">
+  <div class="card-body">
+    {% if expenses %}
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Paid by</th>
+              <th>Type</th>
+              <th class="text-end">Amount</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for expense in expenses %}
+              <tr>
+                <td>{{ expense.description }}</td>
+                <td>{{ expense.paid_by.username }}</td>
+                <td><span class="badge text-bg-light">{{ expense.get_split_type_display }}</span></td>
+                <td class="text-end">{{ expense.currency.symbol }}{{ expense.amount }}</td>
+                <td>{{ expense.date }}</td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-primary" href="{% url 'expenses:expense_detail' expense.pk %}">Open</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">No expenses recorded in this group yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

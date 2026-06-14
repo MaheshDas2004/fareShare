@@ -1,0 +1,204 @@
+<div class="card card-soft">
+  <div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+      <div>
+        <h2 class="h5 mb-1">{{ form_title|default:"Add expense" }}</h2>
+        <p class="text-muted mb-0">Create an equal, unequal, percentage, or shares-based split.</p>
+      </div>
+      {% if expense %}
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'expenses:expense_detail' expense.pk %}">View expense</a>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{{ action }}" class="vstack gap-4 expense-form">
+      {% csrf_token %}
+      <input type="hidden" name="group_id" value="{{ group.id }}">
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Description</label>
+          <input class="form-control" type="text" name="description" value="{{ expense.description|default:'' }}" placeholder="Dinner, taxi, hotel..." required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Amount</label>
+          <input class="form-control" type="number" step="0.01" min="0" name="amount" value="{{ expense.amount|default:'' }}" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Currency</label>
+          <select class="form-select" name="currency_id" required data-currency-select>
+            {% for currency in currencies %}
+              <option
+                value="{{ currency.id }}"
+                data-code="{{ currency.code }}"
+                {% if expense and expense.currency_id == currency.id or not expense and currency.code == group.default_currency %}selected{% endif %}
+              >
+                {{ currency.code }} · {{ currency.symbol }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="alert alert-info py-2 mt-2 mb-0 small d-none" data-conversion-preview></div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Paid by</label>
+          <select class="form-select" name="paid_by" required>
+            {% for row in participant_rows %}
+              <option value="{{ row.member.user.id }}" {% if expense and expense.paid_by_id == row.member.user.id or not expense and forloop.first %}selected{% endif %}>
+                {{ row.member.user.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Split type</label>
+          <select class="form-select split-type" name="split_type" required>
+            {% for value, label in split_types %}
+              <option value="{{ value }}" {% if expense and expense.split_type == value or not expense and value == "EQUAL" %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Date</label>
+          <input class="form-control" type="date" name="date" value="{{ expense.date|date:'Y-m-d'|default:'' }}" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">Participants</label>
+        <div class="border rounded-4 p-3 bg-light">
+          <div class="row g-3">
+            {% for row in participant_rows %}
+              <div class="col-md-6">
+                <div class="participant-row border rounded-4 p-3 bg-white h-100" data-participant-row>
+                  <div class="form-check mb-2">
+                    <input class="form-check-input participant-check" type="checkbox" name="participants" value="{{ row.member.user.id }}" id="participant-{{ group.id }}-{{ row.member.user.id }}" {% if row.selected %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="participant-{{ group.id }}-{{ row.member.user.id }}">
+                      {{ row.member.user.username }}
+                    </label>
+                  </div>
+                  <input
+                    class="form-control form-control-sm share-input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    name="shares"
+                    value="{{ row.share|default:'' }}"
+                    placeholder="Share / % / ratio"
+                  >
+                  <small class="text-muted d-block mt-1 share-help">Required for unequal, percentage, and shares splits.</small>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="alert alert-secondary py-2 mt-3 mb-0 d-none" data-split-preview></div>
+      </div>
+
+      <div>
+        <label class="form-label">Notes</label>
+        <textarea class="form-control" name="notes" rows="3" placeholder="Optional notes">{{ expense.notes|default:'' }}</textarea>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-primary px-4">{{ submit_label|default:"Save expense" }}</button>
+      </div>
+    </form>
+    {% if expense %}
+      <form method="post" action="{% url 'expenses:delete_expense' expense.pk %}" class="mt-3">
+        {% csrf_token %}
+        <button class="btn btn-outline-danger">Delete expense</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{{ currency_rates|json_script:"currency-rates-data" }}
+<script>
+(() => {
+  const form = document.querySelector('.expense-form');
+  if (!form) return;
+
+  const ratesElement = document.getElementById('currency-rates-data');
+  const rates = ratesElement ? JSON.parse(ratesElement.textContent) : {};
+  const currencySelect = form.querySelector('[data-currency-select]');
+  const amountInput = form.querySelector('input[name="amount"]');
+  const preview = form.querySelector('[data-conversion-preview]');
+  const splitPreview = form.querySelector('[data-split-preview]');
+  const defaultCurrency = "{{ group.default_currency }}";
+  const splitType = form.querySelector('.split-type');
+  const shareInputs = Array.from(form.querySelectorAll('.share-input'));
+  const participantChecks = Array.from(form.querySelectorAll('.participant-check'));
+
+  const renderPreview = () => {
+    const selectedOption = currencySelect.options[currencySelect.selectedIndex];
+    const currencyCode = selectedOption?.dataset?.code;
+    const amount = Number(amountInput.value);
+    const isUnequal = splitType.value === 'UNEQUAL';
+    const isPercent = splitType.value === 'PERCENT';
+
+    if (!currencyCode || !amount) {
+      preview.textContent = '';
+      preview.classList.add('d-none');
+      splitPreview.textContent = '';
+      splitPreview.classList.add('d-none');
+      return;
+    }
+
+    const rate = Number(rates[currencyCode] || 0);
+    if (!rate) {
+      preview.textContent = '';
+      preview.classList.add('d-none');
+      splitPreview.textContent = '';
+      splitPreview.classList.add('d-none');
+      return;
+    }
+
+    if (currencyCode === defaultCurrency) {
+      preview.textContent = '';
+      preview.classList.add('d-none');
+    } else {
+      const converted = (amount * rate).toFixed(2);
+      preview.classList.remove('d-none');
+      preview.textContent = `Approx. ₹${converted} at ${rate.toFixed(2)} INR per ${currencyCode}.`;
+    }
+
+    if (!isUnequal && !isPercent) {
+      splitPreview.textContent = '';
+      splitPreview.classList.add('d-none');
+      return;
+    }
+
+    const allocated = shareInputs.reduce((total, input, index) => {
+      if (!participantChecks[index]?.checked) return total;
+      const value = Number(input.value);
+      return Number.isFinite(value) ? total + value : total;
+    }, 0);
+
+    const remaining = isPercent ? 100 - allocated : amount - allocated;
+    splitPreview.classList.remove('d-none');
+    if (remaining > 0) {
+      splitPreview.classList.remove('alert-danger');
+      splitPreview.classList.add('alert-warning');
+      splitPreview.textContent = isPercent
+        ? `Remaining percentage: ${remaining.toFixed(2)}%`
+        : `Remaining to assign: ₹${remaining.toFixed(2)}`;
+    } else if (remaining < 0) {
+      splitPreview.classList.remove('alert-warning');
+      splitPreview.classList.add('alert-danger');
+      splitPreview.textContent = isPercent
+        ? `Over by: ${Math.abs(remaining).toFixed(2)}%`
+        : `Over by: ₹${Math.abs(remaining).toFixed(2)}`;
+    } else {
+      splitPreview.classList.remove('alert-warning', 'alert-danger');
+      splitPreview.classList.add('alert-success');
+      splitPreview.textContent = isPercent ? 'All percentage assigned.' : 'All amount assigned.';
+    }
+  };
+
+  currencySelect.addEventListener('change', renderPreview);
+  amountInput.addEventListener('input', renderPreview);
+  splitType.addEventListener('change', renderPreview);
+  shareInputs.forEach((input) => input.addEventListener('input', renderPreview));
+  participantChecks.forEach((input) => input.addEventListener('change', renderPreview));
+  renderPreview();
+})();
+</script>

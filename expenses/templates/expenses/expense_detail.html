@@ -1,0 +1,86 @@
+{% extends "common/base.html" %}
+{% block title %}Expense · FareShare{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <p class="text-uppercase text-muted small mb-1">{{ group.name }}</p>
+    <h1 class="h3 fw-bold mb-1">{{ expense.description }}</h1>
+    <p class="text-muted mb-0">{{ expense.date }} · paid by {{ expense.paid_by.username }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'expenses:edit_expense' expense.pk %}">Edit</a>
+    <a class="btn btn-outline-primary" href="{% url 'groups:group_detail' group.id %}">Back</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-sm-4">
+            <div class="text-muted small">Amount</div>
+            <div class="fs-4 fw-bold">{{ expense.currency.symbol }}{{ expense.amount }}</div>
+            {% if expense.currency.code != group.default_currency and expense_inr_total %}
+              <div class="text-muted small">≈ ₹{{ expense_inr_total }}</div>
+            {% endif %}
+          </div>
+          <div class="col-sm-4">
+            <div class="text-muted small">Split type</div>
+            <div class="fs-5 fw-semibold">{{ expense.get_split_type_display }}</div>
+          </div>
+          <div class="col-sm-4">
+            <div class="text-muted small">Notes</div>
+            <div>{{ expense.notes|default:"—" }}</div>
+          </div>
+        </div>
+
+        {% if expense.currency.code != group.default_currency %}
+          <div class="alert alert-info py-2 mb-3">
+            This group settles in {{ group.default_currency }}. The app stores {{ expense.currency.code }} amounts and converts them to INR for balances.
+          </div>
+        {% endif %}
+
+        <h2 class="h5 mb-3">Split breakdown</h2>
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th class="text-end">Owed</th>
+                <th class="text-end">INR equivalent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for split in splits %}
+                <tr>
+                  <td>{{ split.user.username }}</td>
+                  <td class="text-end">{{ expense.currency.symbol }}{{ split.owed_amount }}</td>
+                  <td class="text-end">₹{{ split.owed_amount_inr }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card card-soft">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Participants</h2>
+        <ul class="list-group list-group-flush">
+          {% for participant in expense.participants.all %}
+            <li class="list-group-item d-flex justify-content-between">
+              <span>{{ participant.user.username }}</span>
+              <span class="text-muted">{% if participant.is_included %}Included{% else %}Excluded{% endif %}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
