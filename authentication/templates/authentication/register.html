@@ -1,0 +1,42 @@
+{% extends "common/base.html" %}
+{% block title %}Sign up · FareShare{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5 col-md-7">
+    <div class="card card-soft">
+      <div class="card-body p-4 p-lg-5">
+        <h1 class="h3 fw-bold mb-2">Create your account</h1>
+        <p class="text-muted mb-4">Join FareShare and start splitting expenses instantly.</p>
+
+        <form method="post" class="vstack gap-3">
+          {% csrf_token %}
+          <div>
+            <label class="form-label">Username</label>
+            <input class="form-control" type="text" name="username" value="{{ username|default:'' }}" required>
+            {% if errors.username %}<div class="text-danger small mt-1">{{ errors.username }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" name="email" value="{{ email|default:'' }}" required>
+            {% if errors.email %}<div class="text-danger small mt-1">{{ errors.email }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="form-label">Password</label>
+            <input class="form-control" type="password" name="password" required>
+            {% if errors.password %}<div class="text-danger small mt-1">{{ errors.password }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="form-label">Confirm password</label>
+            <input class="form-control" type="password" name="confirm_password" required>
+            {% if errors.confirm_password %}<div class="text-danger small mt-1">{{ errors.confirm_password }}</div>{% endif %}
+          </div>
+          <button class="btn btn-primary btn-lg">Sign up</button>
+        </form>
+
+        <p class="text-muted mt-3 mb-0">Already have an account? <a href="{% url 'login' %}">Login</a>.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
