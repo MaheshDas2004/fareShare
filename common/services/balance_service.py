@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from expenses.models import Expense
 from settlements.models import Settlement
+from groups.models import GroupMembership
 
 
 class BalanceService:
@@ -30,12 +31,13 @@ class BalanceService:
         return self._resolve_balances(net)
 
     def get_user_balances(self, user):
-        from groups.models import Group
-
         owe = []
         owed = []
 
-        groups = Group.objects.filter(members=user)
+        groups = Group.objects.filter(
+            memberships__user=user,
+            memberships__left_at__isnull=True
+        )
 
         for group in groups:
             balances = self.get_group_balances(group)
