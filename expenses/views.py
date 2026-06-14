@@ -4,10 +4,12 @@ from django.db import transaction
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.views.decorators.http import require_POST, require_http_methods
+from decimal import Decimal
 
 from .models import Expense, ExpenseParticipant, Currency
 from .services.split_logic import SplitLogic
 from common.services.balance_service import BalanceService
+from common.services.currency_service import CurrencyService
 from groups.models import Group, GroupMembership
 
 User = get_user_model()
@@ -113,9 +115,32 @@ def edit_expense(request, pk):
 
     group = expense.group
     currencies = Currency.objects.filter(is_active=True)
+    currency_service = CurrencyService()
+    currency_rates = {}
+    for currency in currencies:
+        if currency.code == "INR":
+            currency_rates[currency.code] = "1"
+            continue
+        try:
+            currency_rates[currency.code] = str(currency_service.get_rate(currency.code, expense.date))
+        except ValueError:
+            continue
     active_members = GroupMembership.objects.filter(
         group=group, left_at__isnull=True
     ).select_related("user")
+    participant_rows = []
+    participant_map = {
+        participant.user_id: participant.share
+        for participant in expense.participants.select_related("user").all()
+    }
+    selected_participants = set(expense.participants.filter(is_included=True).values_list("user_id", flat=True))
+
+    for membership in active_members:
+        participant_rows.append({
+            "member": membership,
+            "selected": membership.user_id in selected_participants,
+            "share": participant_map.get(membership.user_id),
+        })
 
     if request.method == "POST":
         try:
@@ -168,6 +193,8 @@ def edit_expense(request, pk):
         "active_members": active_members,
         "split_types": Expense.SPLIT_TYPES,
         "current_participants": expense.participants.filter(is_included=True).values_list("user_id", flat=True),
+        "participant_rows": participant_rows,
+        "currency_rates": currency_rates,
     }
     return render(request, "expenses/edit_expense.html", context)
 
@@ -216,7 +243,6 @@ def expense_list(request, group_id):
 
 @login_required
 def expense_detail(request, pk):
-    
     expense = get_object_or_404(Expense, id=pk)
     group = expense.group
 
@@ -225,11 +251,29 @@ def expense_detail(request, pk):
         return redirect("groups:group_list")
 
     splits = expense.splits.select_related("user").all()
+    currency_service = CurrencyService()
+    try:
+        expense_inr_total = currency_service.convert_to_inr(
+            amount=expense.amount,
+            from_currency_code=expense.currency.code,
+            on_date=expense.date,
+        )
+    except ValueError:
+        expense_inr_total = None
+
+    split_rows = []
+    for split in splits:
+        split_rows.append({
+            "user": split.user,
+            "owed_amount": split.owed_amount,
+            "owed_amount_inr": split.owed_amount_inr,
+        })
 
     return render(request, "expenses/expense_detail.html", {
         "expense": expense,
         "group": group,
-        "splits": splits,
+        "splits": split_rows,
+        "expense_inr_total": expense_inr_total,
     })
 
 
@@ -254,6 +298,8 @@ def group_balances(request, group_id):
 def user_balances(request):
     service = BalanceService()
     balances = service.get_user_balances(request.user)
+    balances["owe_total"] = sum((item["amount"] for item in balances["owe"]), Decimal("0"))
+    balances["owed_total"] = sum((item["amount"] for item in balances["owed"]), Decimal("0"))
 
     return render(request, "expenses/user_balances.html", {
         "balances": balances,
