@@ -40,6 +40,7 @@ INSTALLED_APPS = [
 
     'authentication',
     'groups',
+    'expenses',
 ]
 
 MIDDLEWARE = [
