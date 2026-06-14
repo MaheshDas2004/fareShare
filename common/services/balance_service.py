@@ -1,54 +1,39 @@
 from decimal import Decimal
 from collections import defaultdict
 
-from expenses.models import ExpenseSplit, Expense
+from expenses.models import Expense
 from settlements.models import Settlement
 
 
 class BalanceService:
 
-    # -------------------------
-    # GROUP LEVEL BALANCES
-    # -------------------------
     def get_group_balances(self, group):
-        """
-        Returns: [
-            { 'from_user': userA, 'to_user': userB, 'amount': Decimal }
-        ]
-        """
-        net = defaultdict(Decimal)  # net[user] = kitna milega/dena hai
+        net = defaultdict(Decimal)
 
         expenses = Expense.objects.filter(
-            group=group,
-            is_settled=False
+            group=group
         ).prefetch_related('splits')
 
         for expense in expenses:
             for split in expense.splits.all():
                 if split.user == expense.paid_by:
-                    continue  # apna hissa ignore karo
-
-                # paid_by ko milega
+                    continue
                 net[expense.paid_by] += split.owed_amount
-                # split user ko dena hai
                 net[split.user] -= split.owed_amount
+
+        settlements = Settlement.objects.filter(group=group)
+
+        for settlement in settlements:
+            net[settlement.paid_by] += settlement.amount
+            net[settlement.paid_to] -= settlement.amount
 
         return self._resolve_balances(net)
 
-    # -------------------------
-    # INDIVIDUAL LEVEL BALANCES
-    # -------------------------
     def get_user_balances(self, user):
-        """
-        Returns: {
-            'owe': [{ 'to_user': userB, 'amount': X, 'group': group }],
-            'owed': [{ 'from_user': userA, 'amount': X, 'group': group }]
-        }
-        """
         from groups.models import Group
 
-        owe = []    # mujhe dena hai
-        owed = []   # mujhe milega
+        owe = []
+        owed = []
 
         groups = Group.objects.filter(members=user)
 
@@ -71,23 +56,17 @@ class BalanceService:
 
         return {'owe': owe, 'owed': owed}
 
-    # -------------------------
-    # NET BALANCE RESOLVER
-    # -------------------------
     def _resolve_balances(self, net):
-        """
-        net dict se who owes whom nikalta hai
-        """
         balances = []
 
-        creditors = {u: amt for u, amt in net.items() if amt > 0}  # jinhe milega
-        debtors = {u: amt for u, amt in net.items() if amt < 0}    # jinhe dena hai
-
-        creditors = sorted(creditors.items(), key=lambda x: -x[1])
-        debtors = sorted(debtors.items(), key=lambda x: x[1])
-
-        creditors = list(creditors)
-        debtors = list(debtors)
+        creditors = list(sorted(
+            {u: amt for u, amt in net.items() if amt > 0}.items(),
+            key=lambda x: -x[1]
+        ))
+        debtors = list(sorted(
+            {u: amt for u, amt in net.items() if amt < 0}.items(),
+            key=lambda x: x[1]
+        ))
 
         i, j = 0, 0
 
