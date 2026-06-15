@@ -38,8 +38,11 @@
                     <p class="text-muted mb-0">Status</p>
                 </div>
             </div>
+          </div>
         </div>
-    </div>
+        <a href="{% url 'importer:download_report_pdf' pk=report.id %}" class="btn btn-danger">
+        <i class="bi bi-file-pdf"></i> Download PDF Report
+    </a>
 
     {% if imported %}
     <h5 class="text-success mb-3">✅ Imported / Converted</h5>
