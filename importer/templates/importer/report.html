@@ -1,0 +1,105 @@
+{% extends "common/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h2 class="mb-1">Import Report</h2>
+    <p class="text-muted">{{ report.file_name }} — {{ report.created_at|date:"d M Y, H:i" }}</p>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4>{{ report.total_rows }}</h4>
+                    <p class="text-muted mb-0">Total Rows</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-success">
+                <div class="card-body">
+                    <h4 class="text-success">{{ report.imported_rows }}</h4>
+                    <p class="text-muted mb-0">Imported</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-danger">
+                <div class="card-body">
+                    <h4 class="text-danger">{{ report.skipped_rows }}</h4>
+                    <p class="text-muted mb-0">Skipped</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-primary">
+                <div class="card-body">
+                    <h4 class="text-primary">{{ report.status }}</h4>
+                    <p class="text-muted mb-0">Status</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if imported %}
+    <h5 class="text-success mb-3">✅ Imported / Converted</h5>
+    <table class="table table-bordered table-sm mb-4">
+        <thead class="table-success">
+            <tr>
+                <th>Row</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Action</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in imported %}
+            <tr>
+                <td>{{ row.row_number }}</td>
+                <td>{{ row.raw_data.description }}</td>
+                <td>{{ row.raw_data.amount }}</td>
+                <td>
+                    {% if row.action == "CONVERTED" %}
+                        <span class="badge bg-primary">CONVERTED</span>
+                    {% else %}
+                        <span class="badge bg-success">IMPORTED</span>
+                    {% endif %}
+                </td>
+                <td>{{ row.note }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if skipped %}
+    <h5 class="text-danger mb-3">❌ Skipped</h5>
+    <table class="table table-bordered table-sm mb-4">
+        <thead class="table-danger">
+            <tr>
+                <th>Row</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in skipped %}
+            <tr>
+                <td>{{ row.row_number }}</td>
+                <td>{{ row.raw_data.description }}</td>
+                <td>{{ row.raw_data.amount }}</td>
+                <td>{{ row.note }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <a href="{% url 'importer:import_csv' %}" class="btn btn-secondary">
+        Back
+    </a>
+
+</div>
+{% endblock %}
