@@ -1,8 +1,3 @@
-Theek hai 👍 then README me AI ka naam bilkul nahi hona chahiye. Usko clean + honest rakhte hain, warna interviewer ko confusion ho sakta hai.
-
-Main tumhare liye **corrected README.md (NO AI version)** de raha hoon:
-
----
 
 # 📊 FareShare
 
