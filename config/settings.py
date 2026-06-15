@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'expenses',
     'settlements',
     'common',
+    'importer',
 ]
 
 MIDDLEWARE = [
