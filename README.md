@@ -40,7 +40,7 @@ fareshare/
 ### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/your-username/fareshare.git
+git clone https://github.com/MaheshDas2004/fareShare.git
 cd fareshare
 ```
 
